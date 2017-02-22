@@ -386,7 +386,7 @@ def do_triage(system_details):
     # Release the lock.
     lock.release()
     # Setup a go live session and do stuff.
-    new_triage.setup_go_live_session(sensor_id=sensor_id, host=host, override_existing_session=True)
+    new_triage.setup_go_live_session(sensor_id=sensor_id, host=host, override_existing_session=False)
 
     # Do this if we have a new session
     if new_triage.go_live_session_status:
@@ -427,7 +427,7 @@ def do_triage(system_details):
 
         # Delete the copied logs.
         for file in files_to_get:
-            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(ntpath.split(file))[1])
+            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(ntpath.split(file)[1]))
 
         # Close the session.
         new_triage.close_session()
