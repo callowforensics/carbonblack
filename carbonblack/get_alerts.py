@@ -130,8 +130,6 @@ def binary_alert_processor(data=None):
     if binary_alerts_to_send:
         send_binary_alerts(binary_alerts_to_send)
         update_completed_alerts(completed_alerts=alerts_already_processed)
-    else:
-        logging.info("No new Binary Alerts!")
 
 
 def send_process_alerts(alerts):
@@ -349,7 +347,7 @@ def triage_handler(hosts):
     else:
         # Get the files to be collected.
         with open(arguments.filestoget, "r", encoding="utf-8") as files_to_get:
-            files = [line.strip() for line in files_to_get]
+            files = [line.strip() for line in files_to_get if line]
 
         # Handle the multiprocessing.
         while to_process:
@@ -401,8 +399,7 @@ def do_triage(system_details):
         # upload the 7zip files.
         for file in files_to_put:
             fullpath, filename = file
-            new_triage.put_file(file_to_put=fullpath, remote_path_with_file_name="c:\windows\carbonblack\{}"
-                                .format(filename))
+            new_triage.put_file(file_to_put=fullpath, working_directory=r"c:\windows\carbonblack")
 
         # Copy the files to the carbon black directory (in case they are locked).
         for file in files_to_get:
@@ -425,11 +422,11 @@ def do_triage(system_details):
         # Delete the 7zip files.
         for file in files_to_put:
             fullpath, filename = file
-            new_triage.delete_file(file="c:\windows\carbonblack\{}".format(filename))
+            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(filename))
 
         # Delete the copied logs.
         for file in files_to_get:
-            new_triage.delete_file(file="c:\windows\carbonblack\{}".format(os.path.split(file)[1]))
+            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(os.path.split(file)[1]))
 
         # Close the session.
         new_triage.close_session()
