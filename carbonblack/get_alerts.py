@@ -525,7 +525,8 @@ if __name__ == "__main__":
     epilog = """example: -k 291f565d5593d0b1adb7ae8ea16dfc7347a2d54d
     -u https://155.61.84.205 -w whitewolf -a /home/sansforensics/Desktop/cb/alerts.p
     -p /home/sansforensics/Desktop/cb/processes.p -f /home/sansforensics/Desktop/cb/files.txt
-    -o /home/sansforensics/Desktop/cb/alerts -v c957071070f3b12309abfd34c61f2f0579ee998ca3806ee63883254f25aedf0b"""
+    -o /home/sansforensics/Desktop/cb/alerts -v c957071070f3b12309abfd34c61f2f0579ee998ca3806ee63883254f25aedf0b
+    -e 7zip/x86 -s 7zip/x64"""
 
     # arguments
     parser = argparse.ArgumentParser(description=description, epilog=epilog)
