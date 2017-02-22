@@ -708,44 +708,45 @@ class CbGoLive(_CbConnect):
         else:
             logging.info("Memdump failed for the host: {}.".format(self._host))
 
-    def put_file(self, file_to_put=None, remote_path_with_file_name=None, create_remote_path=True):
+    def put_file(self, working_directory=None, file_to_put=None, create_remote_path=True):
         """puts a file onto a host.
         Args:
-           file_to_put: Filename of the local file to put.
-           remote_path_with_file_name: The name of the file that should be created on the system.
+           working_directory: The absolute path of where the files are going WITHOUT the filename.
+           file_to_put: Filename (full path) of the local file to put.
            create_remote_path: Determines whether to create a remote path (if it does not exist).
         """
-        # Set the local file name, remote path and base remote path.
-        remote_base_path = os.path.split(remote_path_with_file_name)[0]
 
         # Output/logging.
         logging.info("Checking if the target directory, \"{}\", exists on the host: {}."
-                     .format(remote_base_path, self._host))
+                     .format(working_directory, self._host))
+
+        # We assume we are "putting" to a win box.
+        remote_file = ntpath.join(working_directory, ntpath.split(file_to_put)[1])
 
         # Check if the folder exists on the host.
-        check_remote_path = self._stat(object_to_stat=remote_base_path)
+        check_remote_path = self._stat(object_to_stat=working_directory)
 
         # If it does not exist, create it.
         if not check_remote_path:
             if create_remote_path:
                 # Output/logging.
                 logging.info("The target directory, \"{}\", did not exist on the host {}, so it will be created."
-                             .format(remote_base_path, self._host))
+                             .format(working_directory, self._host))
                 create_dir = self.execute_command({"command": r"c:\windows\system32\cmd.exe /c mkdir {}"
-                                                  .format(remote_base_path, self._host)})
+                                                  .format(working_directory, self._host)})
                 if not create_dir:
                     logging.info("The target directory, \"{}\", could not be created on the host {}."
-                                 .format(remote_base_path, self._host))
+                                 .format(working_directory, self._host))
                     return None
             else:
                 logging.info("As requested, the target directory, \"{}\",will not be created on the host: {}, "
                              "and the put operation for the file {} wil be skipped."
-                             .format(remote_base_path, self._host, file_to_put))
+                             .format(working_directory, self._host, file_to_put))
                 return None
 
         # Output/logging.
         logging.info("The target directory, \"{}\", does exist on the host: {}."
-                     .format(remote_base_path, self._host))
+                     .format(working_directory, self._host))
 
         file_to_put_name = file_to_put
         # Open the file to be "put".
@@ -764,7 +765,7 @@ class CbGoLive(_CbConnect):
             # Set the payload to actually put the file from session storage to system storage.
             payload = {"session_id": self.session_id,
                        "name": "put file",
-                       "object": remote_path_with_file_name,
+                       "object": remote_file,
                        "file_id": file_id}
             # Output/logging.
             logging.info("Attempting to put the file \"{}\" onto the host: {}.".format(file_to_put_name, self._host))
@@ -774,12 +775,12 @@ class CbGoLive(_CbConnect):
             # Check if we have a successful result.
             if put_file_on_system:
                 # Now double check this bt checking if the file is actually there.
-                check_if_file_exists = self._stat(object_to_stat=remote_path_with_file_name)
+                check_if_file_exists = self._stat(object_to_stat=remote_file)
 
                 # Check if we have a successful result.
                 if check_if_file_exists:
                     logging.info("Put the file \"{}\" as \"{}\" on the host: {}."
-                                 .format(file_to_put_name, remote_path_with_file_name, self._host))
+                                 .format(file_to_put_name, remote_file, self._host))
                     return True
                 else:
                     logging.info("Failed to put the file \"{}\" onto the host: {}."
@@ -790,7 +791,7 @@ class CbGoLive(_CbConnect):
                 return None
         else:
             logging.info("Failed to put the file \"{}\" onto the host: {}, as the folder \"{}\" does not exist."
-                         .format(file_to_put_name, self._host, remote_path_with_file_name))
+                         .format(file_to_put_name, self._host, remote_file))
             return None
 
     def reg_enum_key(self, keys=None):
