@@ -11,6 +11,7 @@ import json
 import time
 import pickle
 import argparse
+import ntpath
 
 __author__ = "Andrew Callow"
 __copyright__ = "Andrew Callow"
@@ -411,7 +412,7 @@ def do_triage(system_details):
         for file in files_to_get:
             new_triage.execute_command(command="c:\\windows\\system32\\cmd.exe /c c:\\windows\\carbonblack\\7za.exe "
                                                "a -tzip triage.zip \"c:\\windows\\carbonblack\\{}\""
-                                       .format(os.path.split(file)[1]))
+                                       .format(ntpath.split(file)[1]))
 
         # Get the archive.
         new_triage.get_file(file=r"c:\windows\carbonblack\triage.zip")
@@ -426,7 +427,7 @@ def do_triage(system_details):
 
         # Delete the copied logs.
         for file in files_to_get:
-            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(os.path.split(file))[1])
+            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(ntpath.split(file))[1])
 
         # Close the session.
         new_triage.close_session()
