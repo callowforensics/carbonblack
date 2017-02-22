@@ -426,7 +426,7 @@ def do_triage(system_details):
 
         # Delete the copied logs.
         for file in files_to_get:
-            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(os.path.split(file)[1]))
+            new_triage.delete_file(file=r"c:\windows\carbonblack\{}".format(os.path.split(file))[1])
 
         # Close the session.
         new_triage.close_session()
