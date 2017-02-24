@@ -386,7 +386,8 @@ def do_triage(system_details):
     # Release the lock.
     lock.release()
     # Setup a go live session and do stuff.
-    new_triage.setup_go_live_session(sensor_id=sensor_id, host=host, override_existing_session=False)
+    new_triage.setup_go_live_session(sensor_id=sensor_id, host=host, override_existing_session=False,
+                                     create_unique_directory_for_host=True)
 
     # Do this if we have a new session
     if new_triage.go_live_session_status:
