@@ -196,12 +196,15 @@ class CbGoLive(_CbConnect):
         logging.info("Sorted list of online/offline sensors.")
         return
 
-    def setup_go_live_session(self, sensor_id=None, host=None, override_existing_session=False):
+    def setup_go_live_session(self, sensor_id=None, host=None, override_existing_session=False,
+                              create_unique_directory_for_host=False):
         """Sets up a go live session
         Args:
             sensor_id: the host:'s sensor id.
             host: the host: name.
-            override_existing_session: Flag to kill already existing sessions so new ones can be created,
+            override_existing_session: Flag to kill already existing sessions so new ones can be created.
+            create_unique_directory_for_host: Determines whether a unique directory should be created to store host
+            data.
         """
         # Set a connection attempt counter
         connection_attempts = 0
@@ -280,13 +283,22 @@ class CbGoLive(_CbConnect):
                     # Store the array of drive letters.
                     self.host_drives_list = check_session_status["drives"]
                     # Create an output dir for the host's go_live data.
-                    time_now = strftime("%Y-%m-%d %H:%M:%S", gmtime()).replace(" ", "_").replace(":", "-")
-                    self.host_output_path = os.path.join(self.output_path, self._host, time_now)
-                    try:
-                        os.makedirs(self.host_output_path)
-                    except FileExistsError:
-                        pass
-                    return
+                    if create_unique_directory_for_host:
+                        time_now = strftime("%Y-%m-%d %H:%M:%S", gmtime()).replace(" ", "_").replace(":", "-")
+                        self.host_output_path = os.path.join(self.output_path, self._host, time_now)
+                        try:
+                            os.makedirs(self.host_output_path)
+                        except FileExistsError:
+                            pass
+                        return
+                    else:
+                        self.host_output_path = os.path.join(self.output_path, self._host)
+                        try:
+                            os.makedirs(self.host_output_path)
+                        except FileExistsError:
+                            pass
+                        return
+
             # Close session if we have a failure.
             else:
                 self.close_session()
