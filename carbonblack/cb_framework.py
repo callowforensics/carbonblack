@@ -738,27 +738,14 @@ class CbGoLive(_CbConnect):
         # Check if the folder exists on the host.
         check_remote_path = self._stat(object_to_stat=working_directory)
 
-        # If it does not exist, create it.
         if not check_remote_path:
-            if create_remote_path:
-                # Output/logging.
-                logging.info("The target directory, \"{}\", did not exist on the host {}, so it will be created."
-                             .format(working_directory, self._host))
-                create_dir = self.execute_command({"command": r"c:\windows\system32\cmd.exe /c mkdir {}"
-                                                  .format(working_directory, self._host)})
-                if not create_dir:
-                    logging.info("The target directory, \"{}\", could not be created on the host {}."
-                                 .format(working_directory, self._host))
-                    return None
-            else:
-                logging.info("As requested, the target directory, \"{}\",will not be created on the host: {}, "
-                             "and the put operation for the file {} wil be skipped."
-                             .format(working_directory, self._host, file_to_put))
-                return None
-
-        # Output/logging.
-        logging.info("The target directory, \"{}\", does exist on the host: {}."
-                     .format(working_directory, self._host))
+            logging.info("The target directory, \"{}\", does not exist on the host {}."
+                         .format(working_directory, self._host))
+            return
+        else:
+            # Output/logging.
+            logging.info("The target directory, \"{}\", does exist on the host: {}."
+                         .format(working_directory, self._host))
 
         file_to_put_name = file_to_put
         # Open the file to be "put".
