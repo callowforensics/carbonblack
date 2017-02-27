@@ -24,7 +24,7 @@ class _CbConnect(object):
     """Manages HTTP requests to CB Server"""
 
     def __init__(self):
-        self._cb_api_key = ""
+        self._cb_api_key = None
         requests.packages.urllib3.disable_warnings()  # Disable insecure connection warnings.
 
     def _get_cb_json(self, cb_server_url=None, payload=None, return_json=True):
@@ -97,31 +97,6 @@ class _CbConnect(object):
             return None
 
 
-class CbKeepAlive(_CbConnect):
-    """Keeps a go live session alive"""
-
-    def __init__(self, cb_server_url=None, session_id=None):
-        """
-         Args:
-            cb_server_url: CB server URL.
-            session_id: Session ID to keep alive.
-        """
-        super().__init__()
-        # Check if the supplied URL needs the trailing "/" removing.
-        if cb_server_url[-1] == "/":
-            cb_server_url = cb_server_url[:-1]
-        # Path to relevant API.
-        session_api_path = cb_server_url + "/api/v1/cblr/session"
-        while True:
-            time.sleep(60)
-            try:
-                alive = self._get_cb_json(session_api_path + "/{}/keepalive".format(session_id))
-                if alive:
-                    logging.debug("Sent keep alive request for the session: {}.".format(session_id))
-            except requests.exceptions.ConnectionError:
-                pass
-
-
 # noinspection PyTypeChecker
 class CbGoLive(_CbConnect):
     def __init__(self, cb_api_key=None, cb_server_url=None, cb_output_path=None):
@@ -171,14 +146,14 @@ class CbGoLive(_CbConnect):
     def get_sensor_details(self):
         """Gets details of online/offline sensors"""
         # Output/logging.
-        logging.info("Attempting to get sensor information from CB server ({}).".format(self._cb_server_url))
+        logging.debug("Attempting to get sensor information from CB server ({}).".format(self._cb_server_url))
         # Get an instance of the CBConnect class, which returns the decoded JSON (list of dictionaries).
         sensor_list = self._get_cb_json(self._sensor_api_path)
 
         # Check if we have a successful result.
         if sensor_list:
             # Output/logging.
-            logging.info("Obtained sensor information from CB Server.")
+            logging.debug("Obtained sensor information from CB Server.")
         else:
             # Output/logging.
             logging.error("Failed to get the sensor information from CB Server.")
@@ -193,7 +168,7 @@ class CbGoLive(_CbConnect):
                 self.offline_sensors.append(sensor_data)
 
         # Output/logging.
-        logging.info("Sorted list of online/offline sensors.")
+        logging.debug("Sorted list of online/offline sensors.")
         return
 
     def setup_go_live_session(self, sensor_id=None, host=None, override_existing_session=False,
@@ -218,8 +193,8 @@ class CbGoLive(_CbConnect):
             # Set the payload.
             payload = {"sensor_id": int(self._sensor_id)}
             # Output/logging.
-            logging.info("Attempting to start session for the host: {} (sensor_id: {})."
-                         .format(self._host, self._sensor_id))
+            logging.debug("Attempting to start session for the host: {} (sensor_id: {})."
+                          .format(self._host, self._sensor_id))
             # Create a new Go Live session.
             new_session = self._post_cb_json(self._session_api_path, payload=payload)
 
@@ -243,9 +218,9 @@ class CbGoLive(_CbConnect):
                                     self.session_id = str(session["id"])
                                     # Close the existing session.
                                     self.close_session()
-                                    logging.info("Killed existing Go Live session for the host: {} ("
-                                                 "sleeping for 10 seconds until next connection attempt)."
-                                                 .format(self._host))
+                                    logging.debug("Killed existing Go Live session for the host: {} ("
+                                                  "sleeping for 10 seconds until next connection attempt)."
+                                                  .format(self._host))
                                     time.sleep(10)
                     # Increment the connection_attempts counter.
                     connection_attempts += 1
@@ -277,7 +252,7 @@ class CbGoLive(_CbConnect):
                 # Return to the main program if is we have an active session.
                 else:
                     # Output/logging.
-                    logging.info("Session for the host: {} is now active.".format(self._host))
+                    logging.debug("Session for the host: {} is now active.".format(self._host))
                     # Update the session status.
                     self.go_live_session_status = True
                     # Store the array of drive letters.
@@ -305,7 +280,7 @@ class CbGoLive(_CbConnect):
                 return
 
         # Output/logging.
-        logging.error("Session for the system {} could not be established.".format(self._host))
+        logging.error("Session for the host {} could not be established.".format(self._host))
         # Update the session status.
         self.go_live_session_status = None
         # Close the session if is still pending after 15 attempts.
@@ -368,6 +343,9 @@ class CbGoLive(_CbConnect):
                 if command_result["status"] == "pending":
                     # Handle if system is still online if we have made 15 attempts to get the result of the command.
                     if command_attempts == host_alive_check_value:
+                        # Send keep alive.
+                        self._keep_alive()
+                        # Check if the session is active.
                         check_host_status = self._get_cb_json(self._session_api_path + "/{}".format(self.session_id))
                         if check_host_status["status"] != "active":
                             logging.error("Error in \"{}\" command for the host: {} (host is now offline)."
@@ -388,6 +366,19 @@ class CbGoLive(_CbConnect):
                 logging.error("Error in \"{}\" command for the host: {}.".format(command_type, self._host))
                 return None
 
+    def _keep_alive(self):
+        """Keeps sessions alive."""
+        # Path to relevant API.
+        session_api_path = self._cb_server_url + "/api/v1/cblr/session"
+        alive = self._get_cb_json(session_api_path + "/{}/keepalive".format(self.session_id))
+        if alive:
+            logging.debug("Sent keep alive request for the session: {} (host {})."
+                          .format(self.session_id, self._host))
+        else:
+            logging.error("Failed to send keep alive request for the session: {} (host {})."
+                          .format(self.session_id, self._host))
+        return
+
     def close_session(self):
         """Closes go live session."""
         payload = {"id": self.session_id, "status": "close"}
@@ -398,7 +389,7 @@ class CbGoLive(_CbConnect):
         # Check if we have a successful result.
         if close_session:
             # Output/logging.
-            logging.info("Session closed for the host: {}.".format(self._host))
+            logging.debug("Session closed for the host: {}.".format(self._host))
             return
         else:
             logging.error("Session for the host: {} could not be closed.".format(self._host))
@@ -481,7 +472,7 @@ class CbGoLive(_CbConnect):
                        "name": "delete file",
                        "object": file}
             # Output/logging.
-            logging.info("Attempting to delete the file \"{}\" from the host: {}.".format(file, self._host))
+            logging.debug("Attempting to delete the file \"{}\" from the host: {}.".format(file, self._host))
             # Execute the "delete file" command.
             delete_file_on_system = self._handle_commands(payload=payload, command_type="delete file")
             # Check if we have a successful result.
@@ -490,17 +481,17 @@ class CbGoLive(_CbConnect):
                 check_if_file_exists = self._stat(object_to_stat=file)
                 # Check if we have a successful delete.
                 if not check_if_file_exists:
-                    logging.info("File \"{}\" deleted from the host: {}.".format(file, self._host))
+                    logging.debug("File \"{}\" deleted from the host: {}.".format(file, self._host))
                     return True
                 else:
-                    logging.info("Failed to delete the file \"{}\" from the host: {}.".format(file, self._host))
+                    logging.error("Failed to delete the file \"{}\" from the host: {}.".format(file, self._host))
                     return None
             else:
-                logging.info("Failed to delete the file \"{}\" from the host: {}.".format(file, self._host))
+                logging.error("Failed to delete the file \"{}\" from the host: {}.".format(file, self._host))
                 return None
         else:
-            logging.info("The file \"{}\" does not exist on the host: {}, so it can't be deleted."
-                         .format(file, self._host))
+            logging.debug("The file \"{}\" does not exist on the host: {}, so it can't be deleted."
+                          .format(file, self._host))
             return None
 
     def execute_command(self, command=None, output_file=None, wait=True, working_directory=None):
@@ -524,11 +515,11 @@ class CbGoLive(_CbConnect):
 
         # Check if we have a successful result.
         if execute_command:
-            logging.info("Executed the command \"{}\" on the host: {}.".format(command, self._host))
+            logging.debug("Executed the command \"{}\" on the host: {}.".format(command, self._host))
             return True
         else:
-            logging.info("Failed to execute the command \"{}\" on the host: {}."
-                         .format(command, self._host))
+            logging.error("Failed to execute the command \"{}\" on the host: {}."
+                          .format(command, self._host))
             return None
 
     def get_directory_listing(self, directories=None):
@@ -561,12 +552,12 @@ class CbGoLive(_CbConnect):
 
             # Check if we have a successful result.
             if dir_list:
-                logging.info("Got directory listing from the host: {} (for \"{}\")."
-                             .format(self._host, directory_stdout))
+                logging.debug("Got directory listing from the host: {} (for \"{}\")."
+                              .format(self._host, directory_stdout))
                 directory_list_results.append({"directory": directory_stdout, "results": dir_list})
             else:
-                logging.info("Failed to get directory listing from the host: {} (for \"{}\")."
-                             .format(self._host, directory_stdout))
+                logging.debug("Failed to get directory listing from the host: {} (for \"{}\")."
+                              .format(self._host, directory_stdout))
                 continue
 
         # Return the directory listings.
@@ -591,9 +582,9 @@ class CbGoLive(_CbConnect):
         # Check if we have a successful result.
         if check_if_file_exists:
             # Output/Logging.
-            logging.info("File existence check for \"{}\" on the host: {} was successful (file size: {:,} bytes)"
-                         ". Carbon Black is now uploading the file to its staging area before local download can"
-                         " commence.".format(file, self._host, check_if_file_exists["size"]))
+            logging.debug("File existence check for \"{}\" on the host: {} was successful (file size: {:,} bytes)"
+                          ". Carbon Black is now uploading the file to its staging area before local download can"
+                          " commence.".format(file, self._host, check_if_file_exists["size"]))
             #  Set the payload.
             payload = {"session_id": self.session_id,
                        "name": "get file",
@@ -615,9 +606,9 @@ class CbGoLive(_CbConnect):
                                             verify=False)
                     # Do this if we have a result.
                     if get_file:
-                        logging.info("Carbon Black has finished uploading the file {0} to its staging area. "
-                                     "Now downloading the file \"{0}\" (host: {1}) to the specified output directory."
-                                     .format(file, self._host))
+                        logging.debug("Carbon Black has finished uploading the file {0} to its staging area. "
+                                      "Now downloading the file \"{0}\" (host: {1}) to the specified output directory."
+                                      .format(file, self._host))
                         # Open a binary file.
                         if renamed_file:
                             out_file = os.path.join(self.host_output_path, "{}_{}"
@@ -633,16 +624,16 @@ class CbGoLive(_CbConnect):
                                     f.write(chunk)
 
                         # Output/logging.
-                        logging.info("Got the file \"{}\" from the host: {}.".format(file, self._host))
+                        logging.debug("Got the file \"{}\" from the host: {}.".format(file, self._host))
                         return True
                     else:
-                        logging.info("Failed to get the file \"{}\" from the host: {}.".format(file, self._host))
+                        logging.error("Failed to get the file \"{}\" from the host: {}.".format(file, self._host))
                         return None
                 except requests.exceptions.ConnectionError:
-                    logging.info("Failed to get the file \"{}\" from the host: {}.".format(file, self._host))
+                    logging.error("Failed to get the file \"{}\" from the host: {}.".format(file, self._host))
 
         else:
-            logging.warning("File existence check for \"{}\" on the host: {} failed.".format(file, self._host))
+            logging.info("File \"{}\" does not exist on the host: {}.".format(file, self._host))
             return None
 
     def get_running_processes(self):
@@ -658,11 +649,11 @@ class CbGoLive(_CbConnect):
 
         # Check if we have a successful result.
         if process_list:
-            logging.info("Got process list from the host: {}.".format(self._host))
+            logging.debug("Got process list from the host: {}.".format(self._host))
             # Close the session if requested to do so.
             return process_list
         else:
-            logging.info("Failed to get process list from the host: {}.".format(self._host))
+            logging.error("Failed to get process list from the host: {}.".format(self._host))
             return None
 
     def kill_process(self, pid=None):
@@ -675,7 +666,7 @@ class CbGoLive(_CbConnect):
 
         # Check if the PID does not exist by looping through all pids.
         if not any(str(process["pid"]) == str(pid) for process in proc_list):
-            logging.info("PID {} does not exist on the host: {}.".format(pid, self._host))
+            logging.debug("PID {} does not exist on the host: {}.".format(pid, self._host))
             return None
 
         # Set the payload.
@@ -688,10 +679,10 @@ class CbGoLive(_CbConnect):
 
         # Check if we have a successful result.
         if kill_pid:
-            logging.info("Killed PID {} on the host: {}.".format(pid, self._host))
+            logging.debug("Killed PID {} on the host: {}.".format(pid, self._host))
             return True
         else:
-            logging.info("Failed to kill PID {} on the host: {}.".format(pid, self._host))
+            logging.error("Failed to kill PID {} on the host: {}.".format(pid, self._host))
             return None
 
     def mem_dump(self, remote_path=None, compress=True):
@@ -715,10 +706,10 @@ class CbGoLive(_CbConnect):
 
         # Check if we have a successful result.
         if get_memdump:
-            logging.info("Memdump completed for the host: {}.".format(self._host))
+            logging.debug("Memdump completed for the host: {}.".format(self._host))
             self.get_file(file=remote_path)
         else:
-            logging.info("Memdump failed for the host: {}.".format(self._host))
+            logging.error("Memdump failed for the host: {}.".format(self._host))
 
     def put_file(self, working_directory=None, file_to_put=None, create_remote_path=True):
         """puts a file onto a host.
@@ -729,8 +720,8 @@ class CbGoLive(_CbConnect):
         """
 
         # Output/logging.
-        logging.info("Checking if the target directory, \"{}\", exists on the host: {}."
-                     .format(working_directory, self._host))
+        logging.debug("Checking if the target directory, \"{}\", exists on the host: {}."
+                      .format(working_directory, self._host))
 
         # We assume we are "putting" to a win box.
         remote_file = ntpath.join(working_directory, ntpath.split(file_to_put)[1])
@@ -739,12 +730,12 @@ class CbGoLive(_CbConnect):
         check_remote_path = self._stat(object_to_stat=working_directory)
 
         if not check_remote_path:
-            logging.info("The target directory, \"{}\", does not exist on the host {}."
-                         .format(working_directory, self._host))
+            logging.error("The target directory, \"{}\", does not exist on the host {}."
+                          .format(working_directory, self._host))
             return
         else:
             # Output/logging.
-            logging.info("The target directory, \"{}\", does exist on the host: {}."
+            logging.debug("The target directory, \"{}\", does exist on the host: {}."
                          .format(working_directory, self._host))
 
         file_to_put_name = file_to_put
@@ -767,7 +758,7 @@ class CbGoLive(_CbConnect):
                        "object": remote_file,
                        "file_id": file_id}
             # Output/logging.
-            logging.info("Attempting to put the file \"{}\" onto the host: {}.".format(file_to_put_name, self._host))
+            logging.debug("Attempting to put the file \"{}\" onto the host: {}.".format(file_to_put_name, self._host))
             # Execute the "put file" command.
             put_file_on_system = self._handle_commands(payload=payload, command_type="put file")
 
@@ -778,19 +769,19 @@ class CbGoLive(_CbConnect):
 
                 # Check if we have a successful result.
                 if check_if_file_exists:
-                    logging.info("Put the file \"{}\" as \"{}\" on the host: {}."
+                    logging.debug("Put the file \"{}\" as \"{}\" on the host: {}."
                                  .format(file_to_put_name, remote_file, self._host))
                     return True
                 else:
-                    logging.info("Failed to put the file \"{}\" onto the host: {}."
+                    logging.error("Failed to put the file \"{}\" onto the host: {}."
                                  .format(file_to_put_name, self._host))
                     return None
             else:
-                logging.info("Failed to put the file \"{}\" onto the host: {}.".format(file_to_put_name, self._host))
+                logging.error("Failed to put the file \"{}\" onto the host: {}.".format(file_to_put_name, self._host))
                 return None
         else:
-            logging.info("Failed to put the file \"{}\" onto the host: {}, as the folder \"{}\" does not exist."
-                         .format(file_to_put_name, self._host, remote_file))
+            logging.error("Failed to put the file \"{}\" onto the host: {}."
+                          .format(file_to_put_name, self._host, remote_file))
             return None
 
     def reg_enum_key(self, keys=None):
@@ -818,10 +809,10 @@ class CbGoLive(_CbConnect):
 
             # Check if we have a successful result.
             if reg_keys:
-                logging.info("Reg enum for \"{}\" on the host: {} successful.".format(key, self._host))
+                logging.debug("Reg enum for \"{}\" on the host: {} successful.".format(key, self._host))
                 key_results.append({"key": key, "sub_keys": reg_keys})
             else:
-                logging.info("Reg enum for \"{}\" on the host: {} unsuccessful.".format(key, self._host))
+                logging.error("Reg enum for \"{}\" on the host: {} unsuccessful.".format(key, self._host))
                 continue
 
         # Return the results.
@@ -848,10 +839,10 @@ class CbGoLive(_CbConnect):
             reg_values = self._handle_commands(payload=payload, command_type="reg value query", return_key="value")
             # Check if we have a successful result.
             if reg_values:
-                logging.info("Got reg value from the host: {} (for \"{}\").".format(self._host, value))
+                logging.debug("Got reg value from the host: {} (for \"{}\").".format(self._host, value))
                 value_results.append({"value": value, "results": reg_values})
             else:
-                logging.info("Failed to get reg value from the host: {} (for \"{}\").".format(self._host, value))
+                logging.error("Failed to get reg value from the host: {} (for \"{}\").".format(self._host, value))
                 continue
 
         return value_results
@@ -875,9 +866,9 @@ class CbGoLive(_CbConnect):
             delete_key = self._handle_commands(payload=payload, command_type="delete reg key")
             # Check if we have a successful result.
             if delete_key:
-                logging.info("Reg key \"{}\" deleted on the host: {}.".format(key, self._host))
+                logging.debug("Reg key \"{}\" deleted on the host: {}.".format(key, self._host))
             else:
-                logging.info("Reg key \"{}\" was not deleted on the host: {}.".format(key, self._host))
+                logging.error("Reg key \"{}\" was not deleted on the host: {}.".format(key, self._host))
                 continue
 
     def reg_delete_value(self, values=None):
@@ -899,9 +890,9 @@ class CbGoLive(_CbConnect):
             delete_value = self._handle_commands(payload=payload, command_type="delete reg value")
             # Check if we have a successful result.
             if delete_value:
-                logging.info("Reg value \"{}\" deleted on the host: {}.".format(value, self._host))
+                logging.debug("Reg value \"{}\" deleted on the host: {}.".format(value, self._host))
             else:
-                logging.info("Reg value \"{}\" was not deleted on the host: {}.".format(value, self._host))
+                logging.error("Reg value \"{}\" was not deleted on the host: {}.".format(value, self._host))
                 continue
 
     def reg_set_value(self, values=None, overwrite=False):
@@ -948,10 +939,10 @@ class CbGoLive(_CbConnect):
             set_value = self._handle_commands(payload=payload, command_type="reg set value")
             # Check if we have a successful result.
             if set_value:
-                logging.info("Reg value \"{}\" set on the host: {}.".format(str(value["value_data"]), self._host))
+                logging.debug("Reg value \"{}\" set on the host: {}.".format(str(value["value_data"]), self._host))
             else:
-                logging.info("Reg value \"{}\" was not set on the host: {}."
-                             .format(str(value["value_data"]), self._host))
+                logging.error("Reg value \"{}\" was not set on the host: {}."
+                              .format(str(value["value_data"]), self._host))
                 continue
 
     def create_directory_listing_report(self, directories=None):
@@ -969,7 +960,8 @@ class CbGoLive(_CbConnect):
         for directory in directories:
             # Skip if length of the inner dict["results"] is 2 (these are just the dot double-dot entries.
             if len(directory["results"]) == 2:
-                logging.info("There are no files/folders present within \"{}\"".format(directory["directory"]))
+                logging.debug("There are no files/folders present on the host {} (within \"{}\")"
+                              .format(self._host, directory["directory"]))
                 continue
             else:
                 # Iterate over each dict in the "results" key.
@@ -1210,7 +1202,7 @@ class CbProcess(_CbConnect):
 
             # Store proc data if has not already been parsed.
             if self._process_id not in self.completed_process_segments:
-                logging.info("Processing data for the process: \"{}\".".format(self._process_name))
+                logging.debug("Processing data for the process: \"{}\".".format(self._process_name))
                 self.process_data_store.append(self._process_data["process"])
                 self.completed_process_segments[self._process_id] = self._process_data["process"]["last_update"]
                 process_children = True
@@ -1374,7 +1366,7 @@ class CbProcess(_CbConnect):
             if do_supertimeline:
                 self._write_csv(title="supertimeline", events=all_results)
         else:
-            logging.info("No new events to write!")
+            logging.debug("No new events to write!")
             return
 
     def _write_csv(self, title=None, events=None):
@@ -1410,7 +1402,7 @@ class CbProcess(_CbConnect):
                 for row in all_results:
                     writer.writerow(row)
 
-                logging.info("Report created/updated: \"{}\".csv".format(os.path.join(self.output_path, title)))
+                logging.debug("Report created/updated: \"{}\".csv".format(os.path.join(self.output_path, title)))
 
         except PermissionError:
             logging.error("Report could not be written (likely because it is already open).")
@@ -1439,27 +1431,27 @@ class CbBinary(_CbConnect):
         if binary_query:
             if binary_query["total_results"] != 0 and binary_query["total_results"] != 1:
                 rows = binary_query["total_results"]
-                logging.info("{} Binary hits for \"{}\"".format(rows, query))
+                logging.debug("{} Binary hits for \"{}\"".format(rows, query))
                 payload = {"q": query, "rows": rows}
                 all_binary_hits = self._get_cb_json("{}".format(self._binary_query_path), payload=payload)
                 if all_binary_hits:
                     for hit in all_binary_hits["results"]:
                         self.binary_hits.append(hit)
                 else:
-                    logging.info("Error in getting binary data from server.")
+                    logging.error("Error in getting binary data from server.")
                     return
 
             elif binary_query["total_results"] == 1:
-                logging.info("1 Binary hit for \"{}\"".format(query))
+                logging.debug("1 Binary hit for \"{}\"".format(query))
                 for hit in binary_query["results"]:
                     self.binary_hits.append(hit)
 
             elif binary_query["total_results"] == 0:
-                logging.info("No Binary hits for the query \"{}\".".format(query))
+                logging.debug("No Binary hits for the query \"{}\".".format(query))
                 return
 
         else:
-            logging.info("Error in getting binary data from server (for query \"{}\".".format(query))
+            logging.error("Error in getting binary data from server (for query \"{}\".".format(query))
             return
 
     def create_binary_report(self, hits=None):
@@ -1499,7 +1491,7 @@ class CbBinary(_CbConnect):
                 writer.writerow(header)
                 for row in hits_store:
                     writer.writerow(row)
-                logging.info("Binary report created")
+                logging.debug("Binary report created")
         except PermissionError:
             logging.error("Report could not be written (likely because it is already open).")
 
@@ -1544,7 +1536,7 @@ class CBAlert(_CbConnect):
     def get_watchlist_details(self):
         watchlists = self._get_cb_json("{}".format(self._watchlist_api_path))
         if watchlists:
-            logging.info("Got all watchlists from CB server.")
+            logging.debug("Got all watchlists from CB server.")
             for watchlist in watchlists:
                 if self._watchlist_name:
                     if self._watchlist_name in watchlist["name"].lower():
@@ -1553,7 +1545,6 @@ class CBAlert(_CbConnect):
                     self.watchlist_details.append(watchlist)
 
     def get_alerts(self):
-        print("Looking for new alerts...")
         # Get a count of all unresolved alerts.
         payload = {"q": "status:\"unresolved\""}
         alerts_summary = self._get_cb_json("{}".format(self._alert_api_path), payload=payload)
