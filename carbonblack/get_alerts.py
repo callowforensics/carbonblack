@@ -30,18 +30,25 @@ def alert_handler():
     else:
         cls_command = "clear"
 
-    # Create instance of CBAlert class.
-    cb_alert = CBAlert(cb_api_key=arguments.cbapikey, cb_server_url=arguments.cbserverurl,
-                       watchlist_name=arguments.watchlist)
     while True:
+        # Create instance of CBAlert class.
+        cb_alert = CBAlert(cb_api_key=arguments.cbapikey, cb_server_url=arguments.cbserverurl,
+                           watchlist_name=arguments.watchlist)
+
+        # Get the alerts
         cb_alert.get_alerts()
+        print("Looking for alerts...")
 
         # See if we have alerts.
         if cb_alert.watchlist_process_hits:
             process_alert_processor(data=cb_alert.watchlist_process_hits)
+        else:
+            print("No process alerts.")
 
         if cb_alert.watchlist_binary_hits:
             binary_alert_processor(data=cb_alert.watchlist_binary_hits)
+        else:
+            print("No binary alerts.")
 
         # Sleep for 10 seconds.
         print("Alert checker is sleeping...")
@@ -88,11 +95,15 @@ def process_alert_processor(data=None):
     # Send the alerts first and do the heavy lifting after.
     if process_alerts_to_send:
         send_process_alerts(process_alerts_to_send)
+        print("Sent alert(s) for new and unresolved process hit(s).")
         # Write all newly processed alerts if we need to (old and new).
         update_completed_alerts(completed_alerts=alerts_already_processed)
+    else:
+        print("No new process alert(s) to send.")
 
     # Get all process data if we have events that have not already been processed.
     if to_process:
+        print("Walking process data for each unresolved alert (see \"carbon_black.log\" for progress updates).")
         # Loop through each watchlist.
         for watchlist in to_process:
             # Get the already completed procs.
@@ -112,6 +123,11 @@ def process_alert_processor(data=None):
     # Triage the systems that need to be triaged LAST.
     if hosts_for_triage:
         hosts_for_triage = list(set(hosts_for_triage))
+        print("Starting GoLive sessions for the following alerting hosts (see \"carbon_black.log\" for "
+              "progress updates):\n")
+        for index, host in enumerate(hosts_for_triage, 1):
+            print("{}) {}\n".format(index, host))
+
         triage_handler(hosts_for_triage)
 
 
@@ -130,7 +146,10 @@ def binary_alert_processor(data=None):
 
     if binary_alerts_to_send:
         send_binary_alerts(binary_alerts_to_send)
+        print("Sent alert(s) for new and unresolved binary hit(s)")
         update_completed_alerts(completed_alerts=alerts_already_processed)
+    else:
+        print("No new binary alert(s) to send.")
 
 
 def send_process_alerts(alerts):
@@ -208,14 +227,8 @@ def send_process_alerts(alerts):
             .format(collected_data["alert_count"], use_case, collected_data["alert_time"][0],
                     collected_data["alert_time"][-1], hosts, paths, users, banner, highlights, disclaimer)
 
-        # Send the message to the local listener.
-        try:
-            clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            clientsocket.connect(('localhost', 9999))
-            clientsocket.sendall(bytes(message, "utf-8"))
-            clientsocket.shutdown(socket.SHUT_WR)
-        except ConnectionRefusedError:
-            logging.info("There is no local alert listener running!")
+        # Send the message to the dispatcher.
+        dispatch_alert_message(message)
 
 
 def send_binary_alerts(alerts):
@@ -313,16 +326,21 @@ def send_binary_alerts(alerts):
                     .format(alert_watchlist_name, alert_created_time, alert_hostname, alert_md5, observed_file_names,
                             observed_hosts, highlights, vt_link, vt_summary, vt_results, banner)
 
-            # Send the message to the local listener.
-            try:
-                clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                clientsocket.connect(('localhost', 9999))
-                clientsocket.sendall(bytes(message, "utf-8"))
-                clientsocket.shutdown(socket.SHUT_WR)
-            except ConnectionRefusedError:
-                logging.error("There is no local alert listener running!")
+            # Send the message to the dispatcher.
+            dispatch_alert_message(message)
 
-            time.sleep(5)
+
+def dispatch_alert_message(message):
+    """sends the alert message to the specified UDP port."""
+    # Send the message to the local listener.
+    try:
+        clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        clientsocket.connect(('localhost', 9999))
+        clientsocket.sendall(bytes(message, "utf-8"))
+        clientsocket.shutdown(socket.SHUT_WR)
+        time.sleep(2)
+    except ConnectionRefusedError:
+        logging.error("There is no local alert listener running!")
 
 
 def triage_handler(hosts):
