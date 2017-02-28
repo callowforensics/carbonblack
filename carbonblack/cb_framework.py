@@ -49,6 +49,8 @@ class _CbConnect(object):
                     return get_data.content
                 else:
                     return get_data.json()
+            else:
+                return None
         except requests.exceptions.ConnectionError:
             return None
 
@@ -347,13 +349,18 @@ class CbGoLive(_CbConnect):
                         self._keep_alive()
                         # Check if the session is active.
                         check_host_status = self._get_cb_json(self._session_api_path + "/{}".format(self.session_id))
-                        if check_host_status["status"] != "active":
+                        if check_host_status:
+                            if check_host_status["status"] != "active":
+                                logging.error("Error in \"{}\" command for the host: {} (host is now offline)."
+                                              .format(command_type, self._host))
+                                return None
+                            else:
+                                # Increment the host_alive_check value.
+                                host_alive_check_value += 15
+                        else:
                             logging.error("Error in \"{}\" command for the host: {} (host is now offline)."
                                           .format(command_type, self._host))
                             return None
-                        else:
-                            # Increment the host_alive_check value.
-                            host_alive_check_value += 15
 
                 # Handle the commands if the limit_attempts option is set.
                 if limit_attempts and command_attempts == 15:
@@ -736,7 +743,7 @@ class CbGoLive(_CbConnect):
         else:
             # Output/logging.
             logging.debug("The target directory, \"{}\", does exist on the host: {}."
-                         .format(working_directory, self._host))
+                          .format(working_directory, self._host))
 
         file_to_put_name = file_to_put
         # Open the file to be "put".
