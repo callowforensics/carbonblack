@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from cb_framework import CbGoLive
 import cb_logger
 import sys
