@@ -77,8 +77,9 @@ if __name__ == "__main__":
                     # Get the archive.
                     triage.get_file(file=r"c:\windows\carbonblack\mft.zip")
 
-                    # Delete the mft file.
-                    triage.delete_file(file=r"c:\windows\carbonblack\c_mft.bin")
+                    # Delete the mft files.
+                    for drive_letter in triage.host_drives_list:
+                        triage.delete_file(file=r"c:\windows\carbonblack\{}_mft.bin".format(drive_letter))
 
                     # Delete the fget file.
                     triage.delete_file(file=r"c:\windows\carbonblack\fget.exe")
