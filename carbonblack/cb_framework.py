@@ -11,14 +11,6 @@ import ntpath
 import netaddr
 import platform
 
-__author__ = "Andrew Callow"
-__copyright__ = "Andrew Callow"
-__title__ = "cb_framework.py"
-__license__ = "Proprietary"
-__version__ = "1.0"
-__email__ = "acallow@btinternet.com"
-__status__ = "Prototype"
-
 
 class _CbConnect(object):
     """Manages HTTP requests to CB Server"""
