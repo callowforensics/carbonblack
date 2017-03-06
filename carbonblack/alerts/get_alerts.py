@@ -13,14 +13,6 @@ import pickle
 import argparse
 import ntpath
 
-__author__ = "Andrew Callow"
-__copyright__ = "Andrew Callow"
-__title__ = "get_alerts.py"
-__license__ = "Proprietary"
-__version__ = "1.0"
-__email__ = "acallow@btinternet.com"
-__status__ = "Prototype"
-
 
 def alert_handler():
     """Looks for unresolved alerts and gets all proc data"""
