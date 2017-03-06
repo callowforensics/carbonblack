@@ -2,14 +2,6 @@ import logging
 import os
 import requests
 
-__author__ = "Andrew Callow"
-__copyright__ = "Andrew Callow"
-__title__ = "cb_logger.py"
-__license__ = "Proprietary"
-__version__ = "1.0"
-__email__ = "acallow@btinternet.com"
-__status__ = "Prototype"
-
 
 def logger(path):
     #  Create the logger.
