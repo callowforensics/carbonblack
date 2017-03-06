@@ -1,5 +1,7 @@
 Gets a recursive set of process events from a given process ID.
 
+Requires:
+
 **cb_framework.py:** 
 
 Python 3 code for the low-level API interaction. This was written as a personal project, so the python wrapper that ships with CB  may be of better use. Full instructions regarding all classes/methods to follow.
