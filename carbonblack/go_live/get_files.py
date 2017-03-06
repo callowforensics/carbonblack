@@ -21,8 +21,6 @@ if __name__ == "__main__":
     hosts = sys.argv[4]
     files = sys.argv[5]
 
-    cb_logger.logger(output_dir)
-
     with open(files, "r") as f:
         files_to_get = [line.strip() for line in f if line != "\n"]
 
@@ -31,6 +29,8 @@ if __name__ == "__main__":
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
+    cb_logger.logger(output_dir)
 
     triage = CbGoLive(cb_api_key=cb_api, cb_server_url=cb_url, cb_output_path=output_dir)
     triage.get_sensor_details()
